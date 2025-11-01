@@ -3,8 +3,13 @@
 
 #define SW_TX_PIN PB10
 #define DEBUG_MODE 1                                                                                                                // Enable USART1 debug interface. RX of TTL adapter needs to be connected to pin PA9 (TX).
+#if !DEBUG_MODE
+#define PERF_TEST 0
+#endif
 #if DEBUG_MODE
 #define DEBUG_BUTTON_PRESS 1                                                                                                        // Print which button is pressed on the SWC.
+#endif
+#if DEBUG_MODE || PERF_TEST
 const uint16_t DEBUG_SERIAL_TIMEOUT = 10000;
 const uint32_t DEBUG_SERIAL_BAUD = 230400;
 #endif
@@ -26,7 +31,7 @@ const uint16_t SLAVE_COMM_TIMEOUT = 1000;
 const uint16_t SLAVE_BOOT_DELAY = 50;
 const uint16_t MASTER_COMM_TIMEOUT = 60000;
 
-#if DEBUG_MODE
+#if DEBUG_MODE || PERF_TEST
 HardwareSerial Serial(USART1);
 #endif
 HardwareSerial car_lin(USART2);
@@ -114,13 +119,15 @@ bool e_message_initialized = false, ba_message_initialized = false,
 
 
 void setup() {
-#if DEBUG_MODE
+#if DEBUG_MODE || PERF_TEST
   Serial.begin(DEBUG_SERIAL_BAUD);
   while (!Serial) {
     if (millis() >= DEBUG_SERIAL_TIMEOUT) {
       break;
     }
   }
+#endif
+#if DEBUG_MODE
   Serial.println("=======================================");
   Serial.println("Audi MQB to C7 MLB LIN adapter started.");
   Serial.print("Core clock speed: ");
@@ -155,6 +162,9 @@ void setup() {
 }
 
 void loop() {
+#if PERF_TEST
+  unsigned long loop_timer = micros();
+#endif
 
 // MASTER - requests button status, steering heater status and provides backlight status to the steering wheel.
 // NOTE: since RX and TX are tied together sync bytes and IDs will be looped back.
@@ -162,6 +172,15 @@ void loop() {
     slave_comm_timer = millis();
     byte n = slave_frame.num_bytes();
     byte b = sw_lin.read();
+
+// #if DEBUG_MODE
+//     if (b == 0x55) {         
+//       Serial.println();
+//     }
+//     Serial.print(" ");
+//     Serial.print(b, HEX);
+//     return;
+// #endif
 
     if (e_message_requested) {
       if (n == 0 && b == 0x55) {
@@ -216,7 +235,7 @@ void loop() {
         sw_lin.write(backlight_status_message[i]);
       }
       backlight_status_message_timer = millis();
-      sw_lin.flush();
+      // sw_lin.flush();
     }
 
     if ((millis() - fb_message_timer) >= FB_MESSAGE_INTERVAL) {
@@ -230,7 +249,7 @@ void loop() {
         sw_lin.write(fb_message[i]);
       }
       fb_message_timer = millis();
-      sw_lin.flush();
+      // sw_lin.flush();
     }
    
     send_lin_break();
@@ -243,11 +262,19 @@ void loop() {
     e_message_requested = true;
   }
 
-
 // SLAVE - reports button status, steering heater status and receive backlight data from car.
   if (car_lin.available()) {
     master_comm_timer = millis();
     byte b = car_lin.read();
+
+// #if DEBUG_MODE
+//     if (b == 0x55) {         
+//       Serial.println();
+//     }
+//     Serial.print(" ");
+//     Serial.print(b, HEX);
+//     return;
+// #endif
 
     switch (slave_parse_state) {
       case SYNC_WAIT:
@@ -289,12 +316,14 @@ void loop() {
             Serial.print(master_frame.num_bytes());
             Serial.print(" Expected: ");
             Serial.println(current_frame->expected_bytes);
+            // print_frame(master_frame);
 #endif
-            master_frame.reset();
             slave_parse_state = SYNC_WAIT;
           } else {
             master_frame.append_byte(b);
           }
+        break;
+        default:
           break;
     }
   }
@@ -306,16 +335,18 @@ void loop() {
 #endif
     send_lin_wakeup();
     delay(SLAVE_BOOT_DELAY);
-    slave_comm_timer = millis();
-    request_heating_status_timer = millis();
-    request_buttons_status_timer = millis();
     e_message_requested = false;
     ba_message_requested = false;
     e_message_initialized = false;
     ba_message_initialized = false;
     buttons_error_state = 0;
     steering_temperature = 0;
+    slave_comm_timer = millis();
+    request_heating_status_timer = millis();
+    request_buttons_status_timer = millis();
+    fb_message_timer = millis();
   }
+
   if ((millis() - master_comm_timer) >= MASTER_COMM_TIMEOUT) {
     if (d_message_initialized) {
 #if DEBUG_MODE
@@ -326,6 +357,13 @@ void loop() {
       NVIC_SystemReset();
     }
   }
+
+#if PERF_TEST
+  unsigned long exec_time = micros() - loop_timer;
+  if (exec_time >= 1000) {
+    Serial.println((micros() - loop_timer) / 1000.0);
+  }
+#endif
 }
 
 
@@ -361,3 +399,15 @@ void print_frame(LinFrame frame) {
   }
 }
 #endif
+
+
+uint8_t calculate_lin2_checksum(uint8_t *data, uint8_t id, uint8_t size) {
+  uint16_t checksum = id;
+  for (uint8_t i = 0; i < size; i++) {
+    checksum += data[i];
+    if (checksum >= 0x100) {
+      checksum -= 0xFF;
+    }
+  }
+  return ~checksum & 0xFF;
+}

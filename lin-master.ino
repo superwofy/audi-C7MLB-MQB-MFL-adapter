@@ -10,7 +10,7 @@ void handle_master_request(uint8_t id) {
       // Serial.print(buttons_status_message[i], HEX);
       // Serial.print(" ");
     }
-    car_lin.flush();
+    // car_lin.flush();
     // Serial.println();
   }
   else if (id == 0xBA) {                                                                                                            // Steering heater status request
@@ -22,18 +22,18 @@ void handle_master_request(uint8_t id) {
       // Serial.print(buttons_status_message[i], HEX);
       // Serial.print(" ");
     }
-    car_lin.flush();
+    // car_lin.flush();
     // Serial.println();
   }
-  else if (id == 0x7D) {                                                                                                            // Unknown request
-    for (uint8_t i = 0; i < 9; i++) {
-      car_lin.write(unk_message[i]);
-      // Serial.print(buttons_status_message[i], HEX);
-      // Serial.print(" ");
-    }
-    car_lin.flush();
-    // Serial.println();
-  }
+  // else if (id == 0x7D) {                                                                                                            // Unknown request
+  //   for (uint8_t i = 0; i < 9; i++) {
+  //     car_lin.write(unk_message[i]);
+  //     // Serial.print(buttons_status_message[i], HEX);
+  //     // Serial.print(" ");
+  //   }
+  //   car_lin.flush();
+  //   // Serial.println();
+  // }
 }
 
 
@@ -64,8 +64,8 @@ void handle_master_data_frame() {
     backlight_status_message[0] = master_frame.get_byte(1);
     backlight_status_message[1] = master_frame.get_byte(2);
     backlight_status_message[2] = master_frame.get_byte(3);
-    backlight_status_message[3] = master_frame.get_byte(4);
-    backlight_status_message[4] = master_frame.get_byte(5);
+    // backlight_status_message[3] = master_frame.get_byte(4);    // If this byte if 0xFF, MQB buttons refuse to report button press. MLB works.
+    // backlight_status_message[4] = master_frame.get_byte(5);
 #if DEBUG_MODE
     if (!d_message_initialized) {
       d_message_initialized = true;
@@ -83,6 +83,7 @@ void handle_master_data_frame() {
 #else
     d_message_initialized = true;
 #endif
+    backlight_status_message[4] = calculate_lin2_checksum(backlight_status_message, 0xD, 4);
   }
   else if (id == 0xFB) {
     fb_message[0] = master_frame.get_byte(1);
@@ -97,7 +98,7 @@ void handle_master_data_frame() {
 #else
     fb_message_initialized = true;
 #endif
-  } 
+  }
   // else if (id == 0x3C) {
   // }
 }

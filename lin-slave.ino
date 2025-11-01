@@ -256,14 +256,3 @@ void send_lin_break(void) {
   sw_lin.begin(LINBUS_BAUD);                                                                                                        // Restart UART
 }
 
-
-uint8_t calculate_lin2_checksum(uint8_t *data, uint8_t id, uint8_t size) {
-  uint16_t checksum = id;
-  for (uint8_t i = 0; i < size; i++) {
-    checksum += data[i];
-    if (checksum >= 0x100) {
-      checksum -= 0xFF;
-    }
-  }
-  return ~checksum & 0xFF;
-}
