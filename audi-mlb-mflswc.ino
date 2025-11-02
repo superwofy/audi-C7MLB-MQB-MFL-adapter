@@ -26,8 +26,8 @@ const int8_t SW_TEMP_OFFSET = -10;                                              
 const uint16_t LINBUS_BAUD = 19200;
 const uint16_t LINBUS_BIT_TIME = 52;                                                                                                // At 19200 baud, 1 bit = 52.09 µs
 const uint16_t LINBUS_BREAK_DURATION = LINBUS_BIT_TIME * 15;                                                                        // Minimum 13 bits, ideally around 15.
-const uint16_t E_MESSAGE_INTERVAL = 30;                                                                                             // traces: 30-33 ms
-const uint16_t BA_MESSAGE_INTERVAL = 95;                                                                                            // traces: 95-97 ms
+const uint16_t E_MESSAGE_INTERVAL = 25;                                                                                             // Per observed master schedule this is 32ms.
+const uint16_t BA_MESSAGE_INTERVAL = 80;                                                                                            // Per observed master schedule this is 80ms.
 const uint16_t D_MESSAGE_INTERVAL = 95;                                                                                             // traces: 95-97 ms
 const uint16_t FB_MESSAGE_INTERVAL = 65;
 const uint16_t SLAVE_COMM_TIMEOUT = 1000;
@@ -49,7 +49,7 @@ uint8_t backlight_status_message[] = {0, 0x81, 0, 0, 0x71},                     
         steering_heater_status_message[] = {0x32, 0xFE, 0x14},                                                                      // 0C, button released
         diag_response_message[] = {0, 0, 0, 0, 0, 0, 0, 0, 0},
         diag_command_message[] = {0, 0, 0, 0, 0, 0, 0, 0, 0},
-        fb_message[] = {0, 0x90, 0xFF, 0x73},
+        // fb_message[] = {0, 0x90, 0xFF, 0x73},
         back_button_memory = 0, buttons_error_state = 0,
         steering_temperature = 0, backlight_value = 0;
 
@@ -123,7 +123,7 @@ bool e_message_initialized = false, ba_message_initialized = false,
     d_message_initialized = false, fb_message_initialized = false,
     e_message_requested = false, ba_message_requested = false,
     diag_response_requested = false, diag_response_received = false,
-    slave_timeout = false;
+    slave_timeout = false, holding_back = false, holding_heater = false;
 
 
 void setup() {
@@ -176,7 +176,7 @@ void loop() {
 
 // MASTER - requests button status, steering heater status and provides backlight status to the steering wheel.
 // NOTE: since RX and TX are tied together, transmitted bytes will be mirrored.
-  if (sw_lin.available()) {
+  for (uint8_t i = 0; i < sw_lin.available(); i++) {                                                                                // Rare, should only happen if delayed somewhere else in the program
     slave_comm_timer = millis();
     byte n = slave_frame.num_bytes();
     byte b = sw_lin.read();
@@ -238,7 +238,7 @@ void loop() {
     sw_lin.write((uint8_t)0x55);                                                                                                    // Send sync byte
     // delayMicroseconds(LINBUS_BIT_TIME);
     sw_lin.write((uint8_t)0xBA);                                                                                                    // Send protected ID
-    sw_lin.flush();
+    // sw_lin.flush();    // Not needed - only message this loop.
 
     request_heating_status_timer = millis();
     ba_message_requested = true;
@@ -252,25 +252,23 @@ void loop() {
       // delayMicroseconds(LINBUS_BIT_TIME);
       sw_lin.write((uint8_t)0xD);
 
-      for (uint8_t i = 0; i < 5; i++) {
-        sw_lin.write(backlight_status_message[i]);
-      }
+      sw_lin.write(backlight_status_message, 5);
+
       backlight_status_message_timer = millis();
       sw_lin.flush();
     }
 
-    if ((millis() - fb_message_timer) >= FB_MESSAGE_INTERVAL) {
-      send_lin_break();
-      sw_lin.write((uint8_t)0x55);
-      // delayMicroseconds(LINBUS_BIT_TIME);
-      sw_lin.write((uint8_t)0xFB);
+// This message appears to be fixed. Disabled for now.
+    // if ((millis() - fb_message_timer) >= FB_MESSAGE_INTERVAL) {
+    //   send_lin_break();
+    //   sw_lin.write((uint8_t)0x55);
+    //   // delayMicroseconds(LINBUS_BIT_TIME);
+    //   sw_lin.write((uint8_t)0xFB);
 
-      for (uint8_t i = 0; i < 4; i++) {
-        sw_lin.write(fb_message[i]);
-      }
-      fb_message_timer = millis();
-      sw_lin.flush();
-    }
+    //   sw_lin.write(fb_message, 4);
+    //   fb_message_timer = millis();
+    //   sw_lin.flush();
+    // }
    
     send_lin_break();
     sw_lin.write((uint8_t)0x55);
@@ -285,7 +283,7 @@ void loop() {
 // SLAVE - reports button status, steering heater status and receive backlight data from car.
 // NOTE: since RX and TX are tied together, transmitted bytes will be mirrored.
 
-  if (car_lin.available()) {
+  for (uint8_t i = 0; i < car_lin.available(); i++) {
     master_comm_timer = millis();
     byte b = car_lin.read();
 
@@ -363,6 +361,9 @@ void loop() {
     ba_message_initialized = false;
     buttons_error_state = 0;
     steering_temperature = 0;
+    back_button_memory = 0;
+    holding_back = false;
+    holding_heater = false;
     slave_comm_timer = millis();
     request_heating_status_timer = millis();
     request_buttons_status_timer = millis();

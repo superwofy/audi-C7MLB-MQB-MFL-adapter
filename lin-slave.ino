@@ -83,21 +83,36 @@ void handle_slave_frame(void) {
 #endif
 
 #if BACK_BUTTON_MEMORY
-    if (buttons_status_message[1] != 8 && buttons_status_message[3] > 0) {                                                          // A button other than back was pressed
-      if (buttons_status_message[1] == 3) {
-        back_button_memory = 2;
-      } else if (buttons_status_message[1] == 2) {
-        back_button_memory = 3;
-      } else if (buttons_status_message[1] == 1) {
-        back_button_memory = 1;
-      }
-    } else if (buttons_status_message[1] == 8 && back_button_memory != 0) {
+    if (buttons_status_message[3] > 0) {
+      if (buttons_status_message[1] != 8) {                                                                                         // A button other than back was pressed
+        if (buttons_status_message[1] == 3) {
+          back_button_memory = 2;
+        } 
+        else if (buttons_status_message[1] == 2) {
+          back_button_memory = 3;
+        }
+        else if (buttons_status_message[1] == 1) {
+          back_button_memory = 1;
+        }
+      } else {
+        holding_back = true;
+        if (back_button_memory != 0) {
 #if DEBUG_BUTTON_PRESS
-      Serial.print("Sending back button action: ");
-      Serial.println(back_button_memory, HEX);
+          Serial.print("Sending back button action: ");
+          Serial.println(back_button_memory, HEX);
 #endif
-      buttons_status_message[1] = back_button_memory;
-      back_button_memory = 0;
+          buttons_status_message[1] = back_button_memory;
+        }
+      }
+    } else {
+      if (holding_back) {
+        holding_back = false;
+        if (back_button_memory == 2) {
+          back_button_memory = 3;
+        } else if (back_button_memory == 3) {
+          back_button_memory = 2;
+        }
+      }
     }
 #endif
 
@@ -191,7 +206,7 @@ void handle_slave_frame(void) {
       Serial.println("Button status message initialized.");
     }
 #else
-      e_message_initialized = true;
+    e_message_initialized = true;
 #endif
   }
   else if (id == 0xBA) {                                                                                                            // Steering heater status
@@ -207,11 +222,23 @@ void handle_slave_frame(void) {
 #endif
 
     steering_heater_status_message[1] = slave_frame.get_byte(2);
-#if DEBUG_BUTTON_PRESS
+
+
+    // Very short presses go undetected on C7. To ensure status is received, send another "pressed" frame.
+    // There's still a healthy debounce timer implemented in J527 but this should ensure the button works every time.
     if (bitRead(steering_heater_status_message[1], 0)) {
+      holding_heater = true; 
+#if DEBUG_BUTTON_PRESS
       Serial.println("[ SWHeat ]");
-    }
 #endif
+    } else {
+      if (holding_heater) {
+        holding_heater = false;
+        bitWrite(steering_heater_status_message[1], 0, 1);
+        steering_heater_status_message[2] = calculate_lin2_checksum(steering_heater_status_message, 0xBA, 2);
+      }
+    }
+
 
 #if DEBUG_MODE
     if (!ba_message_initialized) {

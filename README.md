@@ -21,4 +21,13 @@ Hardware is based on the readily available yellow board on Aliexpress and simila
 * U(S)ART support: "Enabled (no generic 'Serial')"
 
 
-I was not able to connect to the processor with a genuine ST-LINK/V2. J-LINK works fine if BOOT0 is grounded.
+**Hardware changes:**
+
+See [adapter-readme](adapter/README.md)
+![board-pinout](adapter/pinout.jpg "board-pinout")
+
+
+**Notes**
+
+I was not able to connect to the processor with a genuine ST-LINK/V2. J-LINK works fine if BOOT0 is grounded.  
+I have not yet tested if the program works on the CKS32, only the genuine STM32F103.

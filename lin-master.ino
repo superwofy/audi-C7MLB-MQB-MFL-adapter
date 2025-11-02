@@ -5,39 +5,24 @@ void handle_master_request(uint8_t id) {
     if (!e_message_initialized) {
       return;
     }
-    for (uint8_t i = 0; i < 9; i++) {
-      car_lin.write(buttons_status_message[i]);
-      // Serial.print(buttons_status_message[i], HEX);
-      // Serial.print(" ");
-    }
+    car_lin.write(buttons_status_message, 9);
+    // Serial.println(buttons_status_message[0] & 0xF);
     car_lin.end();                                                                                                                  // Waits for TX and clears RX. Crude loopback clear solution.
     car_lin.begin(LINBUS_BAUD);
-    // Serial.println();
   }
   else if (id == 0xBA) {                                                                                                            // Steering heater status request
     if (!ba_message_initialized) {
       return;
     }
-    for (uint8_t i = 0; i < 3; i++) {
-      car_lin.write(steering_heater_status_message[i]);
-      // Serial.print(buttons_status_message[i], HEX);
-      // Serial.print(" ");
-    }
+    car_lin.write(steering_heater_status_message, 3);
     car_lin.end();
     car_lin.begin(LINBUS_BAUD);
-    // Serial.println();
   }
   else if (id == 0x7D) {                                                                                                            // Diagnostic response request
     if (diag_response_received) {
-      for (uint8_t i = 0; i < 9; i++) {
-        car_lin.write(diag_response_message[i]);
-        // Serial.print(diag_response_message[i], HEX);
-        // Serial.print(" ");
-      // }
+      car_lin.write(diag_response_message, 9);
       car_lin.end();
       car_lin.begin(LINBUS_BAUD);
-      // Serial.println();
-      }
     }
     diag_response_received = false;
   }
@@ -98,18 +83,18 @@ void handle_master_data_frame() {
     backlight_status_message[4] = calculate_lin2_checksum(backlight_status_message, 0xD, 4);
   }
   else if (id == 0xFB) {
-    fb_message[0] = master_frame.get_byte(1);
-    fb_message[1] = master_frame.get_byte(2);
-    fb_message[2] = master_frame.get_byte(3);
-    fb_message[3] = master_frame.get_byte(4);
-#if DEBUG_MODE
-    if (!fb_message_initialized) {
-      fb_message_initialized = true;
-      Serial.println("0xFB message initialized");    
-    }
-#else
-    fb_message_initialized = true;
-#endif
+//     fb_message[0] = master_frame.get_byte(1);
+//     fb_message[1] = master_frame.get_byte(2);
+//     fb_message[2] = master_frame.get_byte(3);
+//     fb_message[3] = master_frame.get_byte(4);
+// #if DEBUG_MODE
+//     if (!fb_message_initialized) {
+//       fb_message_initialized = true;
+//       Serial.println("0xFB message initialized");    
+//     }
+// #else
+//     fb_message_initialized = true;
+// #endif
   }
   else if (id == 0x3C) {
     diag_command_message[0] = master_frame.get_byte(1);
