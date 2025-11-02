@@ -1,7 +1,7 @@
 // https://github.com/zapta/linbus/tree/master/analyzer/arduino
-#include "lin_frame.h"
-#if __has_include ("custom_settings.h")
-  #include "custom_settings.h"
+#include "src/lin_frame.h"
+#if __has_include ("src/custom_settings.h")
+  #include "src/custom_settings.h"
 #endif
 
 #define SW_TX_PIN PB10

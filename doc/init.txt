@@ -42,7 +42,7 @@ Old buttons:
 
 
 
-adapter:
+New buttons connected to adapter:
 
 19:41:53.316 -> FB 0 90 FF 73 
 19:41:53.316 -> 8E 
