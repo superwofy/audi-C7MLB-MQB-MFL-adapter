@@ -1,2 +1,5 @@
 tools/*
 custom_settings.h
+*.elf
+*.hex
+*.map

@@ -1,11 +1,10 @@
-// https://github.com/zapta/linbus/tree/master/analyzer/arduino
-#include "src/lin_frame.h"
+#include "src/lin_frame.h"                                                                                                          // https://github.com/zapta/linbus/tree/master/analyzer/arduino
 #if __has_include ("src/custom_settings.h")
   #include "src/custom_settings.h"
 #endif
 
 #define SW_TX_PIN PB10
-#define DEBUG_MODE 1                                                                                                                // Enable USART1 debug interface. RX of TTL adapter needs to be connected to pin PA9 (TX).
+#define DEBUG_MODE 0                                                                                                                // Enable USART1 debug interface. RX of TTL adapter needs to be connected to pin PA9 (TX).
 #if !DEBUG_MODE
 #define PERF_TEST 0
 #endif
@@ -17,7 +16,7 @@ const uint16_t DEBUG_SERIAL_TIMEOUT = 10000;
 const uint32_t DEBUG_SERIAL_BAUD = 230400;
 #endif
 #define CORRECT_SW_TEMP 1                                                                                                           // For aftermarket steering wheels: pretend the temperature is lower than it is. J527 channel 10 adaptation is max 45C.
-#define HORN_AS_DS 1                                                                                                                // Treat the horn message as "drive select". Allows hardwiring R8 style buttons with a simple ground switch.
+#define HORN_AS_DS 0                                                                                                                // Treat the horn message as "drive select". Allows hardwiring R8 style buttons with a simple ground switch.
 #if CORRECT_SW_TEMP
 const int8_t SW_TEMP_OFFSET = -10;                                                                                                  // Offset sensor by this value in degrees Celsius. Warning: this could damage the elements! J527 controls heating directly.
 #endif
@@ -29,9 +28,9 @@ const uint16_t LINBUS_BREAK_DURATION = LINBUS_BIT_TIME * 15;                    
 const uint16_t E_MESSAGE_INTERVAL = 25;                                                                                             // Per observed master schedule this is 32ms.
 const uint16_t BA_MESSAGE_INTERVAL = 80;                                                                                            // Per observed master schedule this is 80ms.
 const uint16_t D_MESSAGE_INTERVAL = 95;                                                                                             // traces: 95-97 ms
-const uint16_t FB_MESSAGE_INTERVAL = 65;
+// const uint16_t FB_MESSAGE_INTERVAL = 65;
 const uint16_t SLAVE_COMM_TIMEOUT = 1000;
-const uint16_t SLAVE_BOOT_DELAY = 50;
+const uint16_t SLAVE_BOOT_DELAY = 100;
 const uint16_t MASTER_COMM_TIMEOUT = 60000;
 
 #if DEBUG_MODE || PERF_TEST
@@ -41,17 +40,21 @@ HardwareSerial car_lin(USART2);
 HardwareSerial sw_lin(USART3);
 
 unsigned long request_buttons_status_timer, request_heating_status_timer,
-              backlight_status_message_timer, fb_message_timer,
+              backlight_status_message_timer,
+              // fb_message_timer,
               slave_comm_timer, master_comm_timer;
 
 uint8_t backlight_status_message[] = {0, 0x81, 0, 0, 0x71},                                                                         // Lights OFF
         buttons_status_message[] = {0x80, 0xF0, 0, 0, 0x21, 0, 0, 0, 0xDE},                                                         // First message upon connection
         steering_heater_status_message[] = {0x32, 0xFE, 0x14},                                                                      // 0C, button released
-        diag_response_message[] = {0, 0, 0, 0, 0, 0, 0, 0, 0},
-        diag_command_message[] = {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        // diag_response_message[] = {0, 0, 0, 0, 0, 0, 0, 0, 0},
+        // diag_command_message[] = {0, 0, 0, 0, 0, 0, 0, 0, 0},
         // fb_message[] = {0, 0x90, 0xFF, 0x73},
-        back_button_memory = 0, buttons_error_state = 0,
-        steering_temperature = 0, backlight_value = 0;
+        back_button_memory = 0;
+
+#if DEBUG_MODE
+uint8_t buttons_error_state = 0, steering_temperature = 0, backlight_value = 0;
+#endif
 
 #ifndef CUSTOM_SETTINGS
 uint8_t button_remap_array[] = {                                                                                                    // Label      MQB original value
@@ -120,9 +123,10 @@ parse_states slave_parse_state = SYNC_WAIT;                                     
 const frame_def* current_frame = nullptr;
 LinFrame master_frame = LinFrame(), slave_frame = LinFrame();
 bool e_message_initialized = false, ba_message_initialized = false,
-    d_message_initialized = false, fb_message_initialized = false,
+    d_message_initialized = false, 
+    // fb_message_initialized = false,
     e_message_requested = false, ba_message_requested = false,
-    diag_response_requested = false, diag_response_received = false,
+    // diag_response_requested = false, diag_response_received = false,
     slave_timeout = false, holding_back = false, holding_heater = false;
 
 
@@ -141,12 +145,6 @@ void setup() {
   Serial.print("   Core clock speed: ");
   Serial.print(F_CPU / 1000000);
   Serial.println(" MHz");
-  int raw_value = analogRead(ATEMP);
-  float voltage = raw_value * (3.3 / 1023.0);
-  float temperature = ((1.43 - voltage) / 0.0043) + 25.0;
-  Serial.print("   Core temperature: ");
-  Serial.print(temperature);
-  Serial.println(" *C");
   Serial.println("=======================================");
   Serial.println();
 #endif
@@ -159,7 +157,7 @@ void setup() {
   request_buttons_status_timer
   =request_heating_status_timer
   =backlight_status_message_timer
-  =fb_message_timer
+  // =fb_message_timer
   =slave_comm_timer
   =master_comm_timer
   =millis();
@@ -280,7 +278,7 @@ void loop() {
     e_message_requested = true;
   }
 
-// SLAVE - reports button status, steering heater status and receive backlight data from car.
+// SLAVE - reports button status, steering heater status and receives backlight data from car.
 // NOTE: since RX and TX are tied together, transmitted bytes will be mirrored.
 
   for (uint8_t i = 0; i < car_lin.available(); i++) {
@@ -359,15 +357,17 @@ void loop() {
     ba_message_requested = false;
     e_message_initialized = false;
     ba_message_initialized = false;
+#if DEBUG_MODE
     buttons_error_state = 0;
     steering_temperature = 0;
+#endif
     back_button_memory = 0;
     holding_back = false;
     holding_heater = false;
-    slave_comm_timer = millis();
-    request_heating_status_timer = millis();
-    request_buttons_status_timer = millis();
-    fb_message_timer = millis();
+    slave_comm_timer
+    // =fb_message_timer
+    =request_heating_status_timer
+    =request_buttons_status_timer = millis();
   }
 
   if ((millis() - master_comm_timer) >= MASTER_COMM_TIMEOUT) {

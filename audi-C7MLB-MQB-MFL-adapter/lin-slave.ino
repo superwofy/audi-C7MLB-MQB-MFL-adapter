@@ -267,18 +267,18 @@ void handle_slave_frame(void) {
 #endif
   } 
   
-  else if (id == 0x7D) {                                                                                                            // UDS response from SWC
-    diag_response_received = true;
-    diag_response_message[0] = slave_frame.get_byte(1);
-    diag_response_message[1] = slave_frame.get_byte(2);
-    diag_response_message[2] = slave_frame.get_byte(3);
-    diag_response_message[3] = slave_frame.get_byte(4);
-    diag_response_message[4] = slave_frame.get_byte(5);
-    diag_response_message[5] = slave_frame.get_byte(6);
-    diag_response_message[6] = slave_frame.get_byte(7);
-    diag_response_message[7] = slave_frame.get_byte(8);
-    diag_response_message[8] = slave_frame.get_byte(9);
-  }
+  // else if (id == 0x7D) {                                                                                                            // UDS response from SWC
+  //   diag_response_received = true;
+  //   diag_response_message[0] = slave_frame.get_byte(1);
+  //   diag_response_message[1] = slave_frame.get_byte(2);
+  //   diag_response_message[2] = slave_frame.get_byte(3);
+  //   diag_response_message[3] = slave_frame.get_byte(4);
+  //   diag_response_message[4] = slave_frame.get_byte(5);
+  //   diag_response_message[5] = slave_frame.get_byte(6);
+  //   diag_response_message[6] = slave_frame.get_byte(7);
+  //   diag_response_message[7] = slave_frame.get_byte(8);
+  //   diag_response_message[8] = slave_frame.get_byte(9);
+  // }
 }
 
 

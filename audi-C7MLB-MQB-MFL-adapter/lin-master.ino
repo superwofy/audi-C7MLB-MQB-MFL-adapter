@@ -18,14 +18,14 @@ void handle_master_request(uint8_t id) {
     car_lin.end();
     car_lin.begin(LINBUS_BAUD);
   }
-  else if (id == 0x7D) {                                                                                                            // Diagnostic response request
-    if (diag_response_received) {
-      car_lin.write(diag_response_message, 9);
-      car_lin.end();
-      car_lin.begin(LINBUS_BAUD);
-    }
-    diag_response_received = false;
-  }
+  // else if (id == 0x7D) {                                                                                                            // Diagnostic response request
+  //   if (diag_response_received) {
+  //     car_lin.write(diag_response_message, 9);
+  //     car_lin.end();
+  //     car_lin.begin(LINBUS_BAUD);
+  //   }
+  //   diag_response_received = false;
+  // }
 }
 
 
@@ -82,7 +82,7 @@ void handle_master_data_frame() {
 #endif
     backlight_status_message[4] = calculate_lin2_checksum(backlight_status_message, 0xD, 4);
   }
-  else if (id == 0xFB) {
+//   else if (id == 0xFB) {
 //     fb_message[0] = master_frame.get_byte(1);
 //     fb_message[1] = master_frame.get_byte(2);
 //     fb_message[2] = master_frame.get_byte(3);
@@ -95,19 +95,19 @@ void handle_master_data_frame() {
 // #else
 //     fb_message_initialized = true;
 // #endif
-  }
-  else if (id == 0x3C) {
-    diag_command_message[0] = master_frame.get_byte(1);
-    diag_command_message[1] = master_frame.get_byte(2);
-    diag_command_message[2] = master_frame.get_byte(3);
-    diag_command_message[3] = master_frame.get_byte(4);
-    diag_command_message[4] = master_frame.get_byte(5);
-    diag_command_message[5] = master_frame.get_byte(6);
-    diag_command_message[6] = master_frame.get_byte(7);
-    diag_command_message[7] = master_frame.get_byte(8);
-    diag_command_message[8] = master_frame.get_byte(9);
-    diag_response_requested = true;
-  }
+//   }
+  // else if (id == 0x3C) {
+  //   diag_command_message[0] = master_frame.get_byte(1);
+  //   diag_command_message[1] = master_frame.get_byte(2);
+  //   diag_command_message[2] = master_frame.get_byte(3);
+  //   diag_command_message[3] = master_frame.get_byte(4);
+  //   diag_command_message[4] = master_frame.get_byte(5);
+  //   diag_command_message[5] = master_frame.get_byte(6);
+  //   diag_command_message[6] = master_frame.get_byte(7);
+  //   diag_command_message[7] = master_frame.get_byte(8);
+  //   diag_command_message[8] = master_frame.get_byte(9);
+  //   diag_response_requested = true;
+  // }
 }
 
 
