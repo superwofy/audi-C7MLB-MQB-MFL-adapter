@@ -5,14 +5,13 @@ These are the LIN frames found on an MLB C7 steering wheel that has heating.
 
 // byte0 - ID. Frame id is 0xE.
 // byte1 - Data0 (counter)
-// byte2 - Data1 (button ID)
-// byte3 - Data2 (always 0)
-// byte4 - Data3 (direction: 1 = Up, 0xF = down / 
-                  press duration: 1 = <1s, 4 = >1s && <2s, 5 = >2s && <3s, 6 = >3s)
+// byte2 - Data1 (button ID 1)
+// byte3 - Data2 (button ID 2 - unused? identical functions to 1)
+// byte4 - Data3 (Bits 0-3 button 1, Bits 4-7 button 2): direction: 1 = Up, 0xF = down / duration: 1 = <1s, 4 = >1s && <2s, 5 = >2s && <3s, 6 = >3s
 // byte5 - Data4 (always 1?)
 // byte6 - Data5 (always 0?)
-// byte7 - Data6 (paddle shifters: 0x20 = released, 0x21 = -, 0x22 = +)
-// byte8 - Data7 (horn Bit0: 0 = released, 1 = pressed), also error states for swc.
+// byte7 - Data6 (paddle shifters: Bit0 - 0 = released, 1 = paddle-; Bit1 - 0 = released, 1 = paddle+)
+// byte8 - Data7 (horn Bit0: 0 = released, 1 = pressed), also error states for swc (see lin-slave.ino).
 // byte9 - checksum
 
 

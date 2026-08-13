@@ -55,24 +55,33 @@ void handle_slave_frame(void) {
 #endif
 
 #if DEBUG_MODE
-    uint8_t new_state = buttons_status_message[7] >> 1;
+    uint8_t new_state = buttons_status_message[7] >> 1;                                                                             // Skip horn status
     if (new_state != buttons_error_state) {
       buttons_error_state = new_state;
       Serial.print("Buttons error state: ");
       Serial.print("0x");
       Serial.print(buttons_status_message[7], HEX);
       Serial.print(" ");
-      if (bitRead(buttons_status_message[7], 7)) {
-        Serial.print("[ LIN fault ] ");
-      }
-      if (bitRead(buttons_status_message[7], 4)) {
-        Serial.print("[ left side buttons missing ] ");
-      }
-      if (bitRead(buttons_status_message[7], 3)) {
-        Serial.print("[ right paddle missing ] ");
+      if (bitRead(buttons_status_message[7], 1)) {
+        Serial.print("[ Horn short to GND ] ");
       }
       if (bitRead(buttons_status_message[7], 2)) {
-        Serial.print("[ left paddle missing ] ");
+        Serial.print("[ left paddle (E439) electrical fault ] ");
+      }
+      if (bitRead(buttons_status_message[7], 3)) {
+        Serial.print("[ right paddle (E438) electrical fault ] ");
+      }
+      if (bitRead(buttons_status_message[7], 4)) {
+        Serial.print("[ left side buttons (E440) electrical fault ] ");
+      }
+      if (bitRead(buttons_status_message[7], 5)) {
+        Serial.print("[ right buttons (E441) electrical fault ] ");
+      }
+      if (bitRead(buttons_status_message[7], 6)) {
+        Serial.print("[ left buttons (E221) defective ] ");
+      }
+      if (bitRead(buttons_status_message[7], 7)) {
+        Serial.print("[ left buttons (E221) implausible signal / LIN fault ] ");
       }
       Serial.println();
     }
@@ -124,7 +133,7 @@ void handle_slave_frame(void) {
     uint8_t old_paddle_byte = buttons_status_message[6];
 #endif
     buttons_status_message[6] = slave_frame.get_byte(7);                                                                            // Paddles
-    buttons_status_message[8] = calculate_lin2_checksum(buttons_status_message, 0x8E, 8);
+    buttons_status_message[8] = calculate_lin_checksum(buttons_status_message, 0x8E, 8);
 
 #if DEBUG_PADDLE_LATENCY
     if (e_message_initialized && buttons_status_message[6] != old_paddle_byte) {
@@ -228,7 +237,7 @@ void handle_slave_frame(void) {
 #if CORRECT_SW_TEMP
     if (steering_heater_status_message[0] < 0xCB) {
       steering_heater_status_message[0] = constrain(steering_heater_status_message[0] + SW_TEMP_OFFSET, 0, 0xFF);
-      steering_heater_status_message[2] = calculate_lin2_checksum(steering_heater_status_message, 0xBA, 2);
+      steering_heater_status_message[2] = calculate_lin_checksum(steering_heater_status_message, 0xBA, 2);
     }
 #else
     steering_heater_status_message[2] = slave_frame.get_byte(3);
@@ -239,16 +248,19 @@ void handle_slave_frame(void) {
 
     // Very short presses go undetected on C7. To ensure status is received, send another "pressed" frame.
     // There's still a healthy debounce timer implemented in J527 but this should ensure the button works every time.
+    // Also increase poll frequency while switching. It makes multiple presses more immediate
     if (bitRead(steering_heater_status_message[1], 0)) {
-      holding_heater = true; 
+      BA_MESSAGE_INTERVAL = 30;
+      heater_button_timer = millis();
+      holding_heater = 1;
 #if DEBUG_BUTTON_PRESS
       Serial.println("[ SWHeat ]");
 #endif
     } else {
-      if (holding_heater) {
-        holding_heater = false;
+      if (holding_heater > 0) {
+        holding_heater--;
         bitWrite(steering_heater_status_message[1], 0, 1);
-        steering_heater_status_message[2] = calculate_lin2_checksum(steering_heater_status_message, 0xBA, 2);
+        steering_heater_status_message[2] = calculate_lin_checksum(steering_heater_status_message, 0xBA, 2);
       }
     }
 

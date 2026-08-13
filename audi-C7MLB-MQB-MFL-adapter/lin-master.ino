@@ -2,6 +2,23 @@
 
 void handle_master_request(uint8_t id) {
   if (id == 0x8E) {                                                                                                                 // Button status request
+    unsigned long now_ms = millis();
+    if (last_car_e_poll != 0) {
+      uint16_t car_e_poll_delta = now_ms - last_car_e_poll;
+      if (car_e_poll_delta > 28 && car_e_poll_delta < 36) {
+        learned_car_e_interval = car_e_poll_delta;
+      }
+#if DEBUG_PADDLE_LATENCY
+      else if (car_e_poll_delta != 0) {                                                                                            // First messages
+        Serial.print("[ 8E car poll delta out of bounds: ");
+        Serial.print(car_e_poll_delta);
+        Serial.println(" ms ]");
+      }
+#endif
+    }
+    last_car_e_poll = now_ms;
+    car_prediction_served = false;                                                                                                  // New car cycle just started
+
     if (!e_message_initialized) {
       return;
     }
@@ -14,7 +31,9 @@ void handle_master_request(uint8_t id) {
       paddle_pending = false;
       Serial.print("[ paddle sent to car, latency: ");
       Serial.print((micros() - paddle_event_timer) / 1000.0, 3);
-      Serial.println(" ms ]");
+      Serial.print(" ms, learned_interval: ");
+      Serial.print(learned_car_e_interval);
+      Serial.println(" ]");
     }
 #endif
     for (uint8_t i = 0; i < 9; i++) {
@@ -34,18 +53,19 @@ void handle_master_request(uint8_t id) {
       car_lin.read();
     }
   }
-  // else if (id == 0x7D) {                                                                                                            // Diagnostic response request
-  //   if (diag_response_received) {
-  //     car_lin.write(diag_response_message, 9);
-  //     // car_lin.end();
-  //     // car_lin.begin(LINBUS_BAUD);
-  //     for (uint8_t i = 0; i < 9; i++) {
-  //       while (!car_lin.available());
-  //       car_lin.read();
-  //     }
-  //   }
-  //   diag_response_received = false;
-  // }
+  else if (id == 0x7D) {                                                                                                            // Diagnostic response request
+    if (current_uds_entry != nullptr && uds_response_index < current_uds_entry->num_chunks) {
+      car_lin.write(current_uds_entry->response[uds_response_index], 9);
+      uds_response_index++;
+      if (uds_response_index >= current_uds_entry->num_chunks) {
+        current_uds_entry = nullptr;                                                                                                // fully sent, don't replay it on further polls
+      }
+      for (uint8_t i = 0; i < 9; i++) {
+        while (!car_lin.available());
+        car_lin.read();
+      }
+    }
+  }
 }
 
 
@@ -100,7 +120,7 @@ void handle_master_data_frame() {
 #else
     d_message_initialized = true;
 #endif
-    backlight_status_message[4] = calculate_lin2_checksum(backlight_status_message, 0xD, 4);
+    backlight_status_message[4] = calculate_lin_checksum(backlight_status_message, 0xD, 4);
   }
 //   else if (id == 0xFB) {
 //     fb_message[0] = master_frame.get_byte(1);
@@ -116,18 +136,29 @@ void handle_master_data_frame() {
 //     fb_message_initialized = true;
 // #endif
 //   }
-  // else if (id == 0x3C) {
-  //   diag_command_message[0] = master_frame.get_byte(1);
-  //   diag_command_message[1] = master_frame.get_byte(2);
-  //   diag_command_message[2] = master_frame.get_byte(3);
-  //   diag_command_message[3] = master_frame.get_byte(4);
-  //   diag_command_message[4] = master_frame.get_byte(5);
-  //   diag_command_message[5] = master_frame.get_byte(6);
-  //   diag_command_message[6] = master_frame.get_byte(7);
-  //   diag_command_message[7] = master_frame.get_byte(8);
-  //   diag_command_message[8] = master_frame.get_byte(9);
-  //   diag_response_requested = true;
-  // }
+  else if (id == 0x3C) {
+    current_uds_entry = nullptr;                                                                                                    // reset on every new request
+    uds_response_index = 0;
+    for (uint8_t i = 0; i < sizeof(uds_table) / sizeof(uds_entry); i++) {
+      bool request_matches = true;
+      for (uint8_t j = 0; j < 8; j++) {
+        if (master_frame.get_byte(j + 1) != uds_table[i].request[j]) {
+          request_matches = false;
+          break;
+        }
+      }
+      if (request_matches) {
+        current_uds_entry = &uds_table[i];
+        break;
+      }
+    }
+#if DEBUG_MODE
+    if (current_uds_entry == nullptr) {
+      Serial.println("UDS request not in table.");
+      print_frame(master_frame);
+    }
+#endif
+  }
 }
 
 
