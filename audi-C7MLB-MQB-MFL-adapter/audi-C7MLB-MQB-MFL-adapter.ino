@@ -10,6 +10,7 @@
 #endif
 #if DEBUG_MODE
 #define DEBUG_BUTTON_PRESS 1                                                                                                        // Print which button is pressed on the SWC.
+#define DEBUG_PADDLE_LATENCY 1
 #endif
 #if DEBUG_MODE || PERF_TEST
 const uint16_t DEBUG_SERIAL_TIMEOUT = 10000;
@@ -34,10 +35,10 @@ const uint16_t SLAVE_BOOT_DELAY = 100;
 const uint16_t MASTER_COMM_TIMEOUT = 60000;
 
 #if DEBUG_MODE || PERF_TEST
-HardwareSerial Serial(USART1);
+Uart Serial(USART1);
 #endif
-HardwareSerial car_lin(USART2);
-HardwareSerial sw_lin(USART3);
+Uart car_lin(USART2);
+Uart sw_lin(USART3);
 
 unsigned long request_buttons_status_timer, request_heating_status_timer,
               backlight_status_message_timer,
@@ -54,42 +55,44 @@ uint8_t backlight_status_message[] = {0, 0x81, 0, 0, 0x71},                     
 
 #if DEBUG_MODE
 uint8_t buttons_error_state = 0, steering_temperature = 0, backlight_value = 0;
+unsigned long paddle_event_timer = 0;
+bool paddle_pending = false;
 #endif
 
 #ifndef CUSTOM_SETTINGS
 uint8_t button_remap_array[] = {                                                                                                    // Label      MQB original value
-        0x0,
+        0,
         1,                                                                                                                          // Menu       (1)
         2,                                                                                                                          // Right      (2)
         3,                                                                                                                          // Left       (3)
-        0x0, 0x0,
+        0, 0,
         6,                                                                                                                          // Scroll     (6)
         7,                                                                                                                          // OK         (7)
         8,                                                                                                                          // Back       (8)              - MQB only
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
         0x12,                                                                                                                       // Vol        (0x12)
-        0x0, 0x0,
-        0x15,                                                                                                                       // Next       (0x15)
-        0x16,                                                                                                                       // Prev       (0x16)
-        0x0, 0x0,
+        0, 0,
+        0x15,                                                                                                                       // Next/FF    (0x15)
+        0x16,                                                                                                                       // Prev/Rew   (0x16)
+        0, 0,
         0x19,                                                                                                                       // Voice      (0x19)
-        0x0,
+        0,
         0x1B,                                                                                                                       // Nav        (0x1B)
         0x1C,                                                                                                                       // Phone      (0x1C)           - MQB only.
-        0x0, 0x0, 0x0,
+        0, 0, 0,
         0x20,                                                                                                                       // Mute       (0x20)
-        0x21,                                                                                                                       // Joker*     (0x21)
-        0x0,
+        0x21,                                                                                                                       // Joker (*)  (0x21)
+        0,
         0x23,                                                                                                                       // View       (0x23)           - MQB only
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
-        0x0, 0x0, 0x0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0,
         0x6F,                                                                                                                       // Exhaust    (0x6F)           - R8
         0x70,                                                                                                                       // drive select (0x70)         - R8/C7.5
         0x71,                                                                                                                       // RS mode    (0x71)           - MQB only (R8 Race flag button)
@@ -174,7 +177,7 @@ void loop() {
 
 // MASTER - requests button status, steering heater status and provides backlight status to the steering wheel.
 // NOTE: since RX and TX are tied together, transmitted bytes will be mirrored.
-  for (uint8_t i = 0; i < sw_lin.available(); i++) {                                                                                // Rare, should only happen if delayed somewhere else in the program
+  for (uint8_t i = 0; i < sw_lin.available(); i++) {                                                                                // Rare, should only happen if delayed somewhere else in the program (multiple bytes)
     slave_comm_timer = millis();
     byte n = slave_frame.num_bytes();
     byte b = sw_lin.read();
@@ -254,6 +257,10 @@ void loop() {
 
       backlight_status_message_timer = millis();
       sw_lin.flush();
+      for (uint8_t i = 0; i < 7; i++) {                                                                                             // Loopback clear brake, ID and data
+        while (!sw_lin.available());
+        sw_lin.read();
+      }
     }
 
 // This message appears to be fixed. Disabled for now.
@@ -309,7 +316,7 @@ void loop() {
           
           // If it's a request frame (just ID + 0), respond immediately
           if (current_frame->type == 0) {
-            slave_parse_state = SYNC_WAIT;  // Expect 0x00 next, then sync
+            slave_parse_state = SYNC_WAIT;  // Expect 0 next, then sync
             handle_master_request(b);
           } else {
             slave_parse_state = READING_DATA;
@@ -324,7 +331,7 @@ void loop() {
         break;
 
         case READING_DATA:
-          if (b == 0x00 && master_frame.num_bytes() == current_frame->expected_bytes) {                                             // Only treat 0x00 as end marker if we have all expected bytes
+          if (b == 0 && master_frame.num_bytes() == current_frame->expected_bytes) {                                                // Only treat 0 as end marker if we have all expected bytes
             handle_master_data_frame();
             master_frame.reset();
             slave_parse_state = SYNC_WAIT;

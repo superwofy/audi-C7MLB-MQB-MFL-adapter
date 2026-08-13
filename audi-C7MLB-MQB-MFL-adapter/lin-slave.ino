@@ -120,8 +120,21 @@ void handle_slave_frame(void) {
     buttons_status_message[4] = slave_frame.get_byte(5);
     buttons_status_message[5] = slave_frame.get_byte(6);
 
+#if DEBUG_PADDLE_LATENCY
+    uint8_t old_paddle_byte = buttons_status_message[6];
+#endif
     buttons_status_message[6] = slave_frame.get_byte(7);                                                                            // Paddles
     buttons_status_message[8] = calculate_lin2_checksum(buttons_status_message, 0x8E, 8);
+
+#if DEBUG_PADDLE_LATENCY
+    if (e_message_initialized && buttons_status_message[6] != old_paddle_byte) {
+      if ((bitRead(buttons_status_message[6], 0) && !bitRead(old_paddle_byte, 0)) ||
+          (bitRead(buttons_status_message[6], 1) && !bitRead(old_paddle_byte, 1))) {
+        paddle_event_timer = micros();
+        paddle_pending = true;
+      }
+    }
+#endif
 
 #if DEBUG_BUTTON_PRESS
     if (e_message_initialized) {                                                                                                    // Discard the init frame

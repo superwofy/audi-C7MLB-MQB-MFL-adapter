@@ -7,22 +7,42 @@ void handle_master_request(uint8_t id) {
     }
     car_lin.write(buttons_status_message, 9);
     // Serial.println(buttons_status_message[0] & 0xF);
-    car_lin.end();                                                                                                                  // Waits for TX and clears RX. Crude loopback clear solution.
-    car_lin.begin(LINBUS_BAUD);
+    // car_lin.end();                                                                                                                  // Waits for TX and clears RX. Crude loopback clear solution.
+    // car_lin.begin(LINBUS_BAUD);
+#if DEBUG_PADDLE_LATENCY
+    if (paddle_pending) {
+      paddle_pending = false;
+      Serial.print("[ paddle sent to car, latency: ");
+      Serial.print((micros() - paddle_event_timer) / 1000.0, 3);
+      Serial.println(" ms ]");
+    }
+#endif
+    for (uint8_t i = 0; i < 9; i++) {
+      while (!car_lin.available());
+      car_lin.read();
+    }
   }
   else if (id == 0xBA) {                                                                                                            // Steering heater status request
     if (!ba_message_initialized) {
       return;
     }
     car_lin.write(steering_heater_status_message, 3);
-    car_lin.end();
-    car_lin.begin(LINBUS_BAUD);
+    // car_lin.end();
+    // car_lin.begin(LINBUS_BAUD);
+    for (uint8_t i = 0; i < 3; i++) {
+      while (!car_lin.available());
+      car_lin.read();
+    }
   }
   // else if (id == 0x7D) {                                                                                                            // Diagnostic response request
   //   if (diag_response_received) {
   //     car_lin.write(diag_response_message, 9);
-  //     car_lin.end();
-  //     car_lin.begin(LINBUS_BAUD);
+  //     // car_lin.end();
+  //     // car_lin.begin(LINBUS_BAUD);
+  //     for (uint8_t i = 0; i < 9; i++) {
+  //       while (!car_lin.available());
+  //       car_lin.read();
+  //     }
   //   }
   //   diag_response_received = false;
   // }

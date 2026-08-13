@@ -16,7 +16,7 @@ It's all built with stm32duino for simplicity. No need for CubeIDE or understand
 **Arduino settings:**
 
 * Board: "Generic STM32F1 series"
-* Optimize: "Faster (-O3) with LTO"
+* Optimize: "Faster (-O2) with LTO"
 * Board part number: "Generic F103CBTx"
 * Upload method: *
 * U(S)ART support: "Enabled (no generic 'Serial')"
